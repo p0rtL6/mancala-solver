@@ -66,8 +66,6 @@ impl MancalaBoard {
             hand -= 1;
         }
 
-        print_board(self.clone());
-
         if space == 0 && is_zero(&self.spaces[6..]) {
             return MoveResult::GameOver;
         } else if space == 0 {
@@ -139,8 +137,8 @@ fn get_user_board() -> MancalaBoard {
 
     let mut player_spaces: Vec<u8> = input
         .trim()
-        .chars()
-        .map(|number_string| number_string.to_digit(10).unwrap().try_into().unwrap())
+        .split(' ')
+        .map(|number_string| number_string.parse::<u8>().unwrap().try_into().unwrap())
         .collect();
 
     input.clear();
@@ -155,8 +153,8 @@ fn get_user_board() -> MancalaBoard {
 
     let mut opponent_spaces: Vec<u8> = input
         .trim()
-        .chars()
-        .map(|number_string| number_string.to_digit(10).unwrap().try_into().unwrap())
+        .split(' ')
+        .map(|number_string| number_string.parse::<u8>().unwrap().try_into().unwrap())
         .collect();
     input.clear();
 
@@ -181,10 +179,6 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
 
         let mut board = board.clone();
 
-        // while board.move_piece(space) {
-
-        // }
-
         loop {
             match board.move_piece(space) {
                 MoveResult::FreeTurn => {
@@ -206,7 +200,6 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
         }
 
         while stack.len() > 0 {
-            println!("iterating stack, left: {}", stack.len());
             let stack_board = stack.pop().expect("Stack Empty");
 
             for mut space in 7..=12 {
@@ -237,13 +230,8 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
             }
         }
         let mut top_board = final_stack.pop().unwrap();
-        println!("starting board compare with: {}", top_board.spaces[0]);
 
         final_stack.into_iter().for_each(|final_board| {
-            println!(
-                "comparing board, old: {}, new: {}",
-                top_board.spaces[0], final_board.spaces[0]
-            );
             if final_board.spaces[0] > top_board.spaces[0] {
                 top_board = final_board;
             };
@@ -252,12 +240,7 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
     }
 
     let mut final_board = space_stack.pop().unwrap();
-    println!("starting board compare with: {}", final_board.spaces[0]);
     space_stack.into_iter().for_each(|board| {
-        println!(
-            "comparing board, old: {}, new: {}",
-            final_board.spaces[0], board.spaces[0]
-        );
         if board.spaces[0] > final_board.spaces[0] {
             final_board = board;
         }
@@ -266,16 +249,31 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
 }
 
 fn main() {
-    let board = get_user_board();
+    let board = get_user_board();    
+    let solved_board = simulate(board, 100);
 
-    print_board(board.clone());
-    // let board = MancalaBoard::default();
+    println!("{:?}", solved_board.move_history);
+    print_board(solved_board);
+}
 
-    let final_board = simulate(board, 3);
-    println!("{:?}", final_board.move_history);
-    print_board(final_board);
+#[cfg(test)]
+mod tests {
+    use crate::{MancalaBoard, simulate, print_board, get_user_board};
 
+    #[test]
+    fn new_board() {
+        let board = MancalaBoard::default();
+        let solved_board = simulate(board, 100);
+        println!("{:?}", solved_board.move_history);
+        print_board(solved_board);
+    }
 
-    // board.move_piece(12);
-    // println!("{:?}", board.move_history);
+    #[test]
+    fn user_board() {
+        let board = get_user_board();    
+        let solved_board = simulate(board, 20);
+
+        println!("{:?}", solved_board.move_history);
+        print_board(solved_board);
+    }
 }
