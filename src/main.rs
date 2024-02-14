@@ -10,6 +10,8 @@ struct MancalaBoard {
     spaces: [u8; 13],
     opponent_store: u8,
     move_history: Vec<u8>,
+    move_count: u8,
+    did_avalanche: bool,
 }
 
 impl Default for MancalaBoard {
@@ -18,6 +20,8 @@ impl Default for MancalaBoard {
             spaces: [0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
             opponent_store: 0,
             move_history: vec![],
+            move_count: 0,
+            did_avalanche: false,
         }
     }
 }
@@ -28,6 +32,8 @@ impl Clone for MancalaBoard {
             spaces: self.spaces,
             opponent_store: self.opponent_store,
             move_history: self.move_history.clone(),
+            move_count: self.move_count,
+            did_avalanche: false,
         };
     }
 }
@@ -38,21 +44,23 @@ impl MancalaBoard {
             spaces,
             opponent_store,
             move_history: vec![],
+            move_count: 0,
+            did_avalanche: false,
         };
     }
 
-    fn move_piece(&mut self, space: usize) -> MoveResult {
-        // add 6 to make player spaces 1-6
-        let mut space: usize = space;
-        if space >= 13 {
-            space -= 13
+    fn move_piece(&mut self, mut space: usize) -> MoveResult {
+        if !self.did_avalanche {
+            self.move_history.push(
+                space
+                    .try_into()
+                    .expect("Could not convert usize to u8 for move history"),
+            );
+        } else {
+            self.did_avalanche = false;
         }
 
-        self.move_history.push(
-            space
-                .try_into()
-                .expect("Could not convert usize to u8 for move history"),
-        );
+        self.move_count += 1;
 
         let mut hand = self.spaces[space];
         self.spaces[space] = 0;
@@ -71,6 +79,7 @@ impl MancalaBoard {
         } else if space == 0 {
             return MoveResult::FreeTurn;
         } else if self.spaces[space] > 1 {
+            self.did_avalanche = true;
             return MoveResult::Avalanche(space);
         } else if is_zero(&self.spaces[6..]) {
             return MoveResult::GameOver;
@@ -81,9 +90,28 @@ impl MancalaBoard {
 }
 
 fn print_board(board: MancalaBoard) {
-    println!("[  ][{}][{}][{}][{}][{}][{}][  ]", board.spaces[12], board.spaces[11], board.spaces[10], board.spaces[9], board.spaces[8], board.spaces[7]);
-    println!("[{}]-------------------[{}]", board.spaces[0], board.opponent_store);
-    println!("[  ][{}][{}][{}][{}][{}][{}][  ]", board.spaces[1], board.spaces[2], board.spaces[3], board.spaces[4], board.spaces[5], board.spaces[6]);
+    println!(
+        "[  ][{}][{}][{}][{}][{}][{}][  ]",
+        board.spaces[12],
+        board.spaces[11],
+        board.spaces[10],
+        board.spaces[9],
+        board.spaces[8],
+        board.spaces[7]
+    );
+    println!(
+        "[{}]-------------------[{}]",
+        board.spaces[0], board.opponent_store
+    );
+    println!(
+        "[  ][{}][{}][{}][{}][{}][{}][  ]",
+        board.spaces[1],
+        board.spaces[2],
+        board.spaces[3],
+        board.spaces[4],
+        board.spaces[5],
+        board.spaces[6]
+    );
     println!();
 }
 
@@ -128,7 +156,7 @@ fn get_user_board() -> MancalaBoard {
     input.clear();
 
     // Get player spaces
-    print!("Player Spaces (opponent->player): ");
+    print!("Player Spaces (opponent->player, space-seperated): ");
     std::io::stdout().flush().expect("error flushing stdout");
 
     std::io::stdin()
@@ -144,7 +172,7 @@ fn get_user_board() -> MancalaBoard {
     input.clear();
 
     // Get opponent spaces
-    print!("Opponent Spaces (player->opponent): ");
+    print!("Opponent Spaces (player->opponent, space-seperated): ");
     std::io::stdout().flush().expect("error flushing stdout");
 
     std::io::stdin()
@@ -171,8 +199,8 @@ fn get_user_board() -> MancalaBoard {
     )
 }
 
-fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
-    let mut space_stack = vec![];
+fn simulate(board: MancalaBoard, depth: u8) -> MancalaBoard {
+    let mut initial_space_stack: Vec<MancalaBoard> = vec![];
     for mut space in 7..=12 {
         let mut stack: Vec<MancalaBoard> = vec![];
         let mut final_stack: Vec<MancalaBoard> = vec![];
@@ -207,7 +235,7 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
                 loop {
                     match temp_board.move_piece(space) {
                         MoveResult::FreeTurn => {
-                            if temp_board.move_history.len() >= depth {
+                            if temp_board.move_count >= depth {
                                 final_stack.push(temp_board);
                                 break;
                             }
@@ -236,11 +264,11 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
                 top_board = final_board;
             };
         });
-        space_stack.push(top_board);
+        initial_space_stack.push(top_board);
     }
 
-    let mut final_board = space_stack.pop().unwrap();
-    space_stack.into_iter().for_each(|board| {
+    let mut final_board = initial_space_stack.pop().unwrap();
+    initial_space_stack.into_iter().for_each(|board| {
         if board.spaces[0] > final_board.spaces[0] {
             final_board = board;
         }
@@ -249,7 +277,7 @@ fn simulate(board: MancalaBoard, depth: usize) -> MancalaBoard {
 }
 
 fn main() {
-    let board = get_user_board();    
+    let board = get_user_board();
     let solved_board = simulate(board, 100);
 
     println!("{:?}", solved_board.move_history);
@@ -258,22 +286,37 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use crate::{MancalaBoard, simulate, print_board, get_user_board};
+    use crate::{simulate, MancalaBoard};
 
     #[test]
-    fn new_board() {
+    fn default_board() {
         let board = MancalaBoard::default();
-        let solved_board = simulate(board, 100);
-        println!("{:?}", solved_board.move_history);
-        print_board(solved_board);
+        assert_eq!([0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4], board.spaces);
     }
 
     #[test]
-    fn user_board() {
-        let board = get_user_board();    
-        let solved_board = simulate(board, 20);
+    fn new_board() {
+        let board = MancalaBoard::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 0);
+        assert_eq!([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], board.spaces);
+    }
 
-        println!("{:?}", solved_board.move_history);
-        print_board(solved_board);
+    #[test]
+    fn solve_default_board() {
+        let board = MancalaBoard::default();
+        let solved_board = simulate(board, 100);
+        assert_eq!(
+            solved_board.move_history,
+            [
+                12, 9, 8, 11, 7, 7, 11, 11, 12, 7, 9, 10, 12, 8, 12, 12, 11, 8, 12, 8, 12, 10, 12,
+                11, 12, 7
+            ]
+        );
+    }
+
+    #[test]
+    fn move_piece() {
+        let mut board = MancalaBoard::default();
+        board.move_piece(7);
+        assert_eq!(board.spaces, [0, 4, 4, 4, 4, 4, 4, 0, 5, 5, 5, 5, 4]);
     }
 }
